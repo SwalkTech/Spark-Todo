@@ -224,6 +224,23 @@ func (a *App) SetViewMode(mode string) (todo.Settings, error) {
 	return settings, nil
 }
 
+// SetTheme 更新主题（"light" 或 "dark"）。
+func (a *App) SetTheme(theme string) (todo.Settings, error) {
+	if err := a.ensureStoreReady(); err != nil {
+		return todo.Settings{}, err
+	}
+
+	settings, err := a.store.GetSettings(a.ctx)
+	if err != nil {
+		return todo.Settings{}, err
+	}
+	settings.Theme = theme
+	if err := a.store.SetSettings(a.ctx, settings); err != nil {
+		return todo.Settings{}, err
+	}
+	return settings, nil
+}
+
 // SetConciseMode 更新"简洁模式"开关：
 // - 持久化到 settings 表
 // - 简洁模式控制窗口是否显示边框（Frameless 属性）

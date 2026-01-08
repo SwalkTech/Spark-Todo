@@ -67,6 +67,7 @@ type Settings struct {
 	AlwaysOnTop bool   `json:"alwaysOnTop"`
 	ViewMode    string `json:"viewMode"`    // "list" | "cards"
 	ConciseMode bool   `json:"conciseMode"` // 简洁模式（控制窗口边框）
+	Theme       string `json:"theme"`       // "light" | "dark"
 }
 
 // Board 是前端渲染所需的聚合数据（一次请求拿到全部视图需要的数据）。

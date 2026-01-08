@@ -34,6 +34,7 @@ const (
 	maxTaskTitleRunes   = 200
 	maxTaskContentRunes = 1000
 	maxViewModeRunes    = 20
+	maxThemeRunes       = 10
 )
 
 // DefaultDBPath 返回默认数据库路径（并确保目录存在）。
@@ -248,6 +249,7 @@ func (s *Store) ensureDefaultSettings(ctx context.Context) error {
 		"hideDone":    "0",
 		"viewMode":    "cards",
 		"conciseMode": "0",
+		"theme":       "light",
 	}
 
 	for k, v := range defaults {
@@ -520,6 +522,7 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 		HideDone:    false,
 		ViewMode:    "cards",
 		ConciseMode: false,
+		Theme:       "light",
 	}
 
 	rows, err := s.db.QueryContext(ctx, `SELECT key, value FROM settings`)
@@ -542,6 +545,8 @@ func (s *Store) GetSettings(ctx context.Context) (Settings, error) {
 			settings.ViewMode = normalizeViewMode(value)
 		case "conciseMode":
 			settings.ConciseMode = value == "1" || strings.EqualFold(value, "true")
+		case "theme":
+			settings.Theme = normalizeTheme(value)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -563,6 +568,9 @@ func (s *Store) SetSettings(ctx context.Context, settings Settings) error {
 		return err
 	}
 	if err := s.setSetting(ctx, "conciseMode", boolTo01(settings.ConciseMode)); err != nil {
+		return err
+	}
+	if err := s.setSetting(ctx, "theme", normalizeTheme(settings.Theme)); err != nil {
 		return err
 	}
 	return nil
@@ -665,5 +673,19 @@ func normalizeViewMode(v string) string {
 		return v
 	default:
 		return "cards"
+	}
+}
+
+// normalizeTheme 将主题规范化为受支持的值（"light" 或 "dark"），其它输入回退到 "light"。
+func normalizeTheme(v string) string {
+	v = strings.TrimSpace(strings.ToLower(v))
+	if utf8.RuneCountInString(v) > maxThemeRunes {
+		return "light"
+	}
+	switch v {
+	case "light", "dark":
+		return v
+	default:
+		return "light"
 	}
 }

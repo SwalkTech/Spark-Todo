@@ -23,6 +23,7 @@ import {
     SetAlwaysOnTop,
     SetConciseMode,
     SetHideDone,
+    SetTheme,
     SetViewMode,
     ShowWaterReminder,
     UpsertTask,
@@ -36,6 +37,7 @@ type ViewMode = 'list' | 'cards';
 type ToastKind = 'error' | 'success';
 type ToastPosition = 'corner' | 'center';
 type QuadrantKey = 'iu' | 'in' | 'nu' | 'nn';
+type Theme = 'light' | 'dark';
 
 type QuadrantPreset = { important: boolean; urgent: boolean };
 
@@ -129,6 +131,7 @@ const MENU_MIN_SIZE_PX = 500;
 
 // “喝水提醒”间隔：启动后触发一次（后端会基于持久化记录做 1 小时去重），之后每 2.5 小时触发一次。
 const WATER_REMINDER_INTERVAL_MS = 2.5 * 60 * 60 * 1000;
+const THEME_STORAGE_KEY = 'sparkTodoTheme';
 
 const appEl = (() => {
     const el = document.querySelector<HTMLElement>('#app');
@@ -150,6 +153,86 @@ const state: State = {
 let toastTimer: number | null = null;
 let waterReminderTimer: number | null = null;
 let resizeRaf: number | null = null;
+
+function normalizeTheme(value: unknown): Theme {
+    const v = String(value ?? '').trim().toLowerCase();
+    return v === 'dark' ? 'dark' : 'light';
+}
+
+function getCurrentTheme(): Theme {
+    return normalizeTheme(document.documentElement.getAttribute('data-theme'));
+}
+
+function setDocumentTheme(theme: Theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+}
+
+function loadStoredTheme(): Theme | null {
+    try {
+        const raw = localStorage.getItem(THEME_STORAGE_KEY);
+        if (!raw) return null;
+        return normalizeTheme(raw);
+    } catch {
+        return null;
+    }
+}
+
+function persistTheme(theme: Theme) {
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+        // ignore
+    }
+}
+
+function syncThemeFromSettings(settings: todo.Settings | null | undefined) {
+    if (!settings) return;
+    const theme = normalizeTheme((settings as any).theme);
+    setDocumentTheme(theme);
+    persistTheme(theme);
+}
+
+async function animateThemeTransition(nextTheme: Theme, origin: {x: number; y: number}) {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const doc: any = document as any;
+    if (prefersReducedMotion || typeof doc.startViewTransition !== 'function') {
+        setDocumentTheme(nextTheme);
+        return;
+    }
+
+    const endRadius = Math.hypot(
+        Math.max(origin.x, window.innerWidth - origin.x),
+        Math.max(origin.y, window.innerHeight - origin.y),
+    );
+
+    const transition = doc.startViewTransition(() => {
+        setDocumentTheme(nextTheme);
+    });
+
+    try {
+        await transition.ready;
+    } catch {
+        return;
+    }
+
+    const anim = (document.documentElement as any).animate(
+        {
+            clipPath: [
+                `circle(0px at ${origin.x}px ${origin.y}px)`,
+                `circle(${endRadius}px at ${origin.x}px ${origin.y}px)`,
+            ],
+        },
+        {
+            duration: 450,
+            easing: 'cubic-bezier(0.5, 0, 1, 1)',
+            pseudoElement: '::view-transition-new(root)',
+        },
+    );
+    await anim.finished.catch(() => {
+        // ignore
+    });
+}
 
 // escapeHtml 用于把用户输入安全地插入到 innerHTML 中，避免 DOM 注入/XSS。
 function escapeHtml(s: unknown): string {
@@ -361,6 +444,7 @@ async function refresh() {
     try {
         state.board = await GetBoard();
         state.error = null;
+        syncThemeFromSettings(state.board?.settings);
     } catch (err) {
         state.error = formatError(err);
     } finally {
@@ -400,6 +484,7 @@ function renderTaskItem(task: todo.Task, viewMode: ViewMode): string {
 // renderDrawer 渲染左上角菜单抽屉（视图切换、隐藏已完成、置顶开关）。
 function renderDrawer(settings: todo.Settings): string {
     const viewMode = normalizeViewMode(settings.viewMode);
+    const theme = normalizeTheme((settings as any).theme);
     return `
     <div class="drawer-root">
       <div class="drawer-backdrop" data-action="toggle-menu"></div>
@@ -424,6 +509,10 @@ function renderDrawer(settings: todo.Settings): string {
             <span>置顶悬浮</span>
           </label>
           <label class="toggle">
+            <input type="checkbox" class="checkbox" data-action="toggle-theme" ${theme === 'dark' ? 'checked' : ''} />
+            <span>夜间模式</span>
+          </label>
+          <label class="toggle">
             <input type="checkbox" class="checkbox" data-action="toggle-concise-mode" ${settings.conciseMode ? 'checked' : ''} />
             <span>简洁模式</span>
           </label>
@@ -446,7 +535,13 @@ function render() {
     if (!menuAllowed) state.drawerOpen = false;
 
     const board = state.board;
-    const settings: todo.Settings = board?.settings ?? {hideDone: false, alwaysOnTop: true, viewMode: 'cards',conciseMode: false};
+    const settings: todo.Settings = board?.settings ?? {
+        hideDone: false,
+        alwaysOnTop: true,
+        viewMode: 'cards',
+        conciseMode: false,
+        theme: 'light',
+    };
     const viewMode = normalizeViewMode(settings.viewMode);
     const hideDone = settings.hideDone;
     const conciseMode = settings.conciseMode;
@@ -765,13 +860,13 @@ appEl.addEventListener('click', async (e) => {
             case 'view-release': {
                 const modal = state.modal;
                 if (modal?.kind !== 'update') return;
-                const pageURL = modal.updateInfo.latestRelease?.pageURL;
-                if (!pageURL) {
+                const pageUrl = modal.updateInfo.latestRelease?.pageUrl;
+                if (!pageUrl) {
                     showToast('未找到详情页面链接', 'error',2500,'center');
                     return;
                 }
                 try {
-                    await OpenURL(pageURL);
+                    await OpenURL(pageUrl);
                     closeModal();
                 } catch (err) {
                     console.error(err);
@@ -830,6 +925,29 @@ appEl.addEventListener('change', async (e) => {
 
     try {
         switch (action) {
+            case 'toggle-theme': {
+                if (!(el instanceof HTMLInputElement)) return;
+                const rect = el.getBoundingClientRect();
+                const origin = {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+                const nextTheme: Theme = el.checked ? 'dark' : 'light';
+                const prevTheme = getCurrentTheme();
+
+                el.disabled = true;
+                try {
+                    const settings = await SetTheme(nextTheme);
+                    if (state.board) state.board.settings = settings;
+                    persistTheme(nextTheme);
+                    await animateThemeTransition(nextTheme, origin);
+                } catch (err) {
+                    el.checked = prevTheme === 'dark';
+                    persistTheme(prevTheme);
+                    setDocumentTheme(prevTheme);
+                    throw err;
+                } finally {
+                    el.disabled = false;
+                }
+                break;
+            }
             case 'toggle-hide-done': {
                 if (!(el instanceof HTMLInputElement)) return;
                 const settings = await SetHideDone(!!el.checked);
@@ -1002,6 +1120,7 @@ async function checkForUpdates(showNoUpdateMessage = false) {
 }
 
 // 首次渲染：先出骨架，再刷新数据。
+setDocumentTheme(loadStoredTheme() ?? 'light');
 render();
 refresh();
 startWaterReminder();

@@ -39,7 +39,7 @@
 
 /* 单个象限（卡片容器） */
 .quadrant {
-    background: rgba(255, 255, 255, 0.75);
+    background: var(--surface-translucent);
     border: 1px solid var(--border);
     border-radius: var(--quadrant-radius, 14px);
     box-shadow: var(--shadow);
@@ -81,7 +81,7 @@
     padding: 2px 8px;
     border-radius: 999px;
     border: 1px solid var(--border);
-    background: rgba(31, 35, 40, 0.04);
+    background: var(--pill-bg);
 }
 
 /* 任务列表区域（在 list/cards 两种视图中承载不同的 task item） */
@@ -105,7 +105,7 @@
     border: 1px solid var(--border);
     border-radius: clamp(11px, 2.4vw, 12px);
     padding: clamp(7px, 2vw, 8px);
-    background: rgba(247, 249, 251, 0.8);
+    background: var(--surface-muted);
     color: var(--text);
     cursor: pointer;
     transition: box-shadow 120ms ease;
@@ -123,7 +123,7 @@
     border: 1px solid var(--border);
     border-radius: clamp(11px, 2.4vw, 12px);
     padding: clamp(5px, 1.6vw, 6px) clamp(7px, 2vw, 8px);
-    background: rgba(247, 249, 251, 0.6);
+    background: var(--surface-muted-2);
 }
 
 .task-check {
@@ -173,7 +173,7 @@
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
-    box-shadow: 0 18px 50px rgba(31, 35, 40, 0.18);
+    box-shadow: var(--shadow-strong);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -207,7 +207,7 @@
 .drawer-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(31, 35, 40, 0.25);
+    background: var(--backdrop);
     backdrop-filter: blur(2px);
     --wails-draggable: no-drag;
 }
@@ -219,7 +219,7 @@
     max-width: calc(100% - 60px);
     background: var(--surface);
     border-right: 1px solid var(--border);
-    box-shadow: 0 18px 50px rgba(31, 35, 40, 0.24);
+    box-shadow: var(--shadow-stronger);
     padding: 10px;
     display: flex;
     flex-direction: column;
@@ -262,7 +262,7 @@
     padding: 5px 8px;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.6);
+    background: var(--toggle-bg);
     user-select: none;
 }
 
@@ -374,14 +374,14 @@ textarea {
     padding: 14px;
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.75);
+    background: var(--surface-translucent);
 }
 
 .empty-state {
     padding: 14px;
     border: 1px dashed var(--border);
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.55);
+    background: var(--surface-soft);
     opacity: 0.8;
 }
 
@@ -410,7 +410,7 @@ textarea {
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(31, 35, 40, 0.25);
+    background: var(--backdrop);
     backdrop-filter: blur(2px);
     --wails-draggable: no-drag;
 }
@@ -424,7 +424,7 @@ textarea {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
-    box-shadow: 0 18px 50px rgba(31, 35, 40, 0.24);
+    box-shadow: var(--shadow-stronger);
     padding: 12px;
     --wails-draggable: no-drag;
 }
@@ -525,7 +525,7 @@ textarea {
     border-radius: 12px;
     border: 1px solid var(--border);
     background: var(--surface);
-    box-shadow: 0 18px 50px rgba(31, 35, 40, 0.18);
+    box-shadow: var(--shadow-strong);
     cursor: pointer;
     user-select: none;
     --wails-draggable: no-drag;

@@ -5,6 +5,7 @@ export namespace todo {
 	    alwaysOnTop: boolean;
 	    viewMode: string;
 	    conciseMode: boolean;
+	    theme: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -16,6 +17,7 @@ export namespace todo {
 	        this.alwaysOnTop = source["alwaysOnTop"];
 	        this.viewMode = source["viewMode"];
 	        this.conciseMode = source["conciseMode"];
+	        this.theme = source["theme"];
 	    }
 	}
 	export class Task {

@@ -46,6 +46,10 @@ export function SetHideDone(arg1) {
   return window['go']['main']['App']['SetHideDone'](arg1);
 }
 
+export function SetTheme(arg1) {
+  return window['go']['main']['App']['SetTheme'](arg1);
+}
+
 export function SetViewMode(arg1) {
   return window['go']['main']['App']['SetViewMode'](arg1);
 }

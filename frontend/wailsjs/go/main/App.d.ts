@@ -25,6 +25,8 @@ export function SetConciseMode(arg1:boolean):Promise<todo.Settings>;
 
 export function SetHideDone(arg1:boolean):Promise<todo.Settings>;
 
+export function SetTheme(arg1:string):Promise<todo.Settings>;
+
 export function SetViewMode(arg1:string):Promise<todo.Settings>;
 
 export function ShowWaterReminder():Promise<void>;

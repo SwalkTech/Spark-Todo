@@ -16,6 +16,41 @@
 
     --border: rgba(31, 35, 40, 0.12);
     --shadow: 0 8px 20px rgba(31, 35, 40, 0.08);
+
+    --text-secondary: rgba(31, 35, 40, 0.72);
+    --bg-accent: rgba(42, 157, 143, 0.08);
+
+    --surface-translucent: rgba(255, 255, 255, 0.75);
+    --surface-soft: rgba(255, 255, 255, 0.55);
+    --surface-muted: rgba(247, 249, 251, 0.8);
+    --surface-muted-2: rgba(247, 249, 251, 0.6);
+    --pill-bg: rgba(31, 35, 40, 0.04);
+    --toggle-bg: rgba(255, 255, 255, 0.6);
+    --backdrop: rgba(31, 35, 40, 0.25);
+    --shadow-strong: 0 18px 50px rgba(31, 35, 40, 0.18);
+    --shadow-stronger: 0 18px 50px rgba(31, 35, 40, 0.24);
+}
+
+:root[data-theme="dark"] {
+    --bg: #0f1216;
+    --surface: #161b22;
+    --text: #e6edf3;
+
+    --border: rgba(230, 237, 243, 0.12);
+    --shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+
+    --text-secondary: rgba(230, 237, 243, 0.72);
+    --bg-accent: rgba(42, 157, 143, 0.15);
+
+    --surface-translucent: rgba(22, 27, 34, 0.75);
+    --surface-soft: rgba(22, 27, 34, 0.55);
+    --surface-muted: rgba(13, 17, 23, 0.8);
+    --surface-muted-2: rgba(13, 17, 23, 0.6);
+    --pill-bg: rgba(230, 237, 243, 0.06);
+    --toggle-bg: rgba(22, 27, 34, 0.7);
+    --backdrop: rgba(0, 0, 0, 0.4);
+    --shadow-strong: 0 18px 50px rgba(0, 0, 0, 0.55);
+    --shadow-stronger: 0 18px 50px rgba(0, 0, 0, 0.65);
 }
 
 html,
@@ -59,4 +94,15 @@ body {
 :focus-visible {
     outline: 2px solid rgba(42, 157, 143, 0.5);
     outline-offset: 2px;
+}
+
+/* View Transitions API：禁用默认交叉淡入淡出，交给 JS 做圆形扩散动画。 */
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+    mix-blend-mode: normal;
 }
