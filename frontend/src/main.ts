@@ -127,7 +127,7 @@ const quadrants = [
 // 小窗口下隐藏菜单（让主要空间留给任务本身）。
 const MENU_MIN_SIZE_PX = 500;
 
-// “喝水提醒”间隔：启动后每 2.5 小时弹一次 Toast。
+// “喝水提醒”间隔：启动后触发一次（后端会基于持久化记录做 1 小时去重），之后每 2.5 小时触发一次。
 const WATER_REMINDER_INTERVAL_MS = 2.5 * 60 * 60 * 1000;
 
 const appEl = (() => {

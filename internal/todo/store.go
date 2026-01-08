@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -577,6 +578,42 @@ func (s *Store) setSetting(ctx context.Context, key string, value string) error 
 		return fmt.Errorf("set setting %q: %w", key, err)
 	}
 	return nil
+}
+
+// GetLastWaterReminderAt 返回上一次“喝水提醒”时间（UnixMilli）。
+//
+// 若从未记录过，则返回 0。
+func (s *Store) GetLastWaterReminderAt(ctx context.Context) (int64, error) {
+	var value string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, "lastWaterReminderAt").Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("get lastWaterReminderAt: %w", err)
+	}
+
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
+	}
+
+	ts, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse lastWaterReminderAt: %w", err)
+	}
+	if ts <= 0 {
+		return 0, nil
+	}
+	return ts, nil
+}
+
+// SetLastWaterReminderAt 保存“喝水提醒”时间（UnixMilli）。
+func (s *Store) SetLastWaterReminderAt(ctx context.Context, unixMilli int64) error {
+	if unixMilli <= 0 {
+		unixMilli = 0
+	}
+	return s.setSetting(ctx, "lastWaterReminderAt", strconv.FormatInt(unixMilli, 10))
 }
 
 // boolTo01 将 bool 编码为 "0"/"1"（便于与 SQLite 的 TEXT 设置表统一）。

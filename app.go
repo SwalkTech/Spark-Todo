@@ -295,7 +295,29 @@ func (a *App) ShowWaterReminder() error {
 	}
 	defer a.waterReminderShowing.Store(false)
 
-	return showWaterReminderSystemCentered(a.ctx, "喝水提醒", "喝水小提醒：该喝水了")
+	// 记录“上一次提醒时间”，避免用户短时间内反复打开应用导致重复弹窗。
+	// 规则：若距离上次提醒未满 1 小时，则本次不打扰。
+	if a.store != nil {
+		lastAt, err := a.store.GetLastWaterReminderAt(a.ctx)
+		if err != nil {
+			runtime.LogErrorf(a.ctx, "failed to read last water reminder time: %v", err)
+		} else if lastAt > 0 && time.Since(time.UnixMilli(lastAt)) < time.Hour {
+			return nil
+		}
+	}
+
+	if err := showWaterReminderSystemCentered(a.ctx, "喝水提醒", "喝水小提醒：该喝水了"); err != nil {
+		return err
+	}
+
+	if a.store != nil {
+		if err := a.store.SetLastWaterReminderAt(a.ctx, time.Now().UnixMilli()); err != nil {
+			// 持久化失败不影响本次提醒展示，避免前端降级为 Toast（会影响体验）。
+			runtime.LogErrorf(a.ctx, "failed to persist last water reminder time: %v", err)
+		}
+	}
+
+	return nil
 }
 
 // GetVersion 获取当前应用版本
