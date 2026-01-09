@@ -91,6 +91,7 @@ type State = {
 declare global {
     interface Window {
         __sparkTodoWaterReminderStarted?: boolean;
+        __sparkTodoHMRCleanup?: () => void;
     }
 }
 
@@ -139,20 +140,77 @@ const appEl = (() => {
     return el;
 })();
 
-const state: State = {
-    board: null,
-    loading: false,
-    error: null,
-    drawerOpen: false,
-    lastPreset: {important: false, urgent: false},
-    modal: null,
-    modalError: null,
-    toast: null,
-};
+const hot = import.meta.hot;
+const isHotReload = !!hot?.data?.__sparkTodoBootstrapped;
+if (hot) hot.data.__sparkTodoBootstrapped = true;
+
+const state: State =
+    (hot?.data?.state as State | undefined) ??
+    ({
+        board: null,
+        loading: false,
+        error: null,
+        drawerOpen: false,
+        lastPreset: {important: false, urgent: false},
+        modal: null,
+        modalError: null,
+        toast: null,
+    } satisfies State);
+
+if (hot) hot.data.state = state;
 
 let toastTimer: number | null = null;
 let waterReminderTimer: number | null = null;
 let resizeRaf: number | null = null;
+let updateCheckTimer: number | null = null;
+
+type CleanupFn = () => void;
+const hotCleanupFns: CleanupFn[] = [];
+
+function registerHotCleanup(fn: CleanupFn) {
+    hotCleanupFns.push(fn);
+}
+
+function cleanupForHotReload() {
+    for (const fn of hotCleanupFns.splice(0)) {
+        try {
+            fn();
+        } catch {
+            // ignore
+        }
+    }
+
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+        toastTimer = null;
+    }
+
+    if (waterReminderTimer) {
+        clearInterval(waterReminderTimer);
+        waterReminderTimer = null;
+    }
+    window.__sparkTodoWaterReminderStarted = false;
+
+    if (resizeRaf) {
+        cancelAnimationFrame(resizeRaf);
+        resizeRaf = null;
+    }
+
+    if (updateCheckTimer) {
+        clearTimeout(updateCheckTimer);
+        updateCheckTimer = null;
+    }
+}
+
+if (hot) {
+    window.__sparkTodoHMRCleanup?.();
+    window.__sparkTodoHMRCleanup = cleanupForHotReload;
+
+    hot.accept();
+    hot.dispose(() => {
+        cleanupForHotReload();
+    });
+}
 
 function normalizeTheme(value: unknown): Theme {
     const v = String(value ?? '').trim().toLowerCase();
@@ -341,7 +399,7 @@ function computeMatrixTemplateAreas(keys: Set<QuadrantKey> | null | undefined): 
 // startWaterReminder 启动喝水提醒。
 //
 // `window.__sparkTodoWaterReminderStarted` 用于防止开发时热更新/重复初始化导致多重定时器。
-function startWaterReminder() {
+function startWaterReminder(immediate = true) {
     if (waterReminderTimer) return;
     if (window.__sparkTodoWaterReminderStarted) return;
     window.__sparkTodoWaterReminderStarted = true;
@@ -353,11 +411,9 @@ function startWaterReminder() {
         });
     };
 
-    trigger();
+    if (immediate) trigger();
 
-    waterReminderTimer = setInterval(() => {
-        trigger();
-    }, WATER_REMINDER_INTERVAL_MS);
+    waterReminderTimer = window.setInterval(trigger, WATER_REMINDER_INTERVAL_MS);
 }
 
 // 默认组：后端会确保至少有一个默认组，因此这里取 groups[0] 作为“兜底”组。
@@ -743,7 +799,7 @@ function render() {
 }
 
 // 事件委托：所有按钮通过 `data-action` 声明操作，统一在这里分发。
-appEl.addEventListener('click', async (e) => {
+const onAppClick = async (e: MouseEvent) => {
     const el = (e.target as HTMLElement | null)?.closest?.('[data-action]') as HTMLElement | null;
     if (!el) return;
 
@@ -879,10 +935,12 @@ appEl.addEventListener('click', async (e) => {
         console.error(err);
         showToast(formatError(err));
     }
-});
+};
+appEl.addEventListener('click', onAppClick);
+registerHotCleanup(() => appEl.removeEventListener('click', onAppClick));
 
 // 弹窗输入时同步写回 state，避免 re-render 覆盖用户正在输入的内容。
-appEl.addEventListener('input', (e) => {
+const onAppInput = (e: Event) => {
     if (!state.modal) return;
 
     const el = e.target;
@@ -898,10 +956,12 @@ appEl.addEventListener('input', (e) => {
             state.modal.content = el.value;
         }
     }
-});
+};
+appEl.addEventListener('input', onAppInput);
+registerHotCleanup(() => appEl.removeEventListener('input', onAppInput));
 
 // change 事件：处理 checkbox/select 的变化（设置项、任务完成勾选等）。
-appEl.addEventListener('change', async (e) => {
+const onAppChange = async (e: Event) => {
     const el = e.target;
     if (!(el instanceof HTMLElement)) return;
 
@@ -996,10 +1056,12 @@ appEl.addEventListener('change', async (e) => {
         console.error(err);
         showToast(formatError(err));
     }
-});
+};
+appEl.addEventListener('change', onAppChange);
+registerHotCleanup(() => appEl.removeEventListener('change', onAppChange));
 
 // submit 事件：提交“新增/编辑任务”表单。
-appEl.addEventListener('submit', async (e) => {
+const onAppSubmit = async (e: Event) => {
     const form = e.target;
     if (!(form instanceof HTMLFormElement)) return;
     const action = form.getAttribute('data-action');
@@ -1064,10 +1126,12 @@ appEl.addEventListener('submit', async (e) => {
         state.modalError = formatError(err);
         render();
     }
-});
+};
+appEl.addEventListener('submit', onAppSubmit);
+registerHotCleanup(() => appEl.removeEventListener('submit', onAppSubmit));
 
 // Esc：优先关闭弹窗，其次关闭菜单。
-document.addEventListener('keydown', (e) => {
+const onDocumentKeydown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
         if (state.modal) {
             e.preventDefault();
@@ -1080,17 +1144,21 @@ document.addEventListener('keydown', (e) => {
             render();
         }
     }
-});
+};
+document.addEventListener('keydown', onDocumentKeydown);
+registerHotCleanup(() => document.removeEventListener('keydown', onDocumentKeydown));
 
 // 窗口变小到阈值后，自动关闭菜单并隐藏入口。
-window.addEventListener('resize', () => {
+const onWindowResize = () => {
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     resizeRaf = requestAnimationFrame(() => {
         resizeRaf = null;
         if (!isMenuAllowed()) state.drawerOpen = false;
         render();
     });
-});
+};
+window.addEventListener('resize', onWindowResize);
+registerHotCleanup(() => window.removeEventListener('resize', onWindowResize));
 
 // checkForUpdates 检查应用更新
 async function checkForUpdates(showNoUpdateMessage = false) {
@@ -1121,11 +1189,16 @@ async function checkForUpdates(showNoUpdateMessage = false) {
 
 // 首次渲染：先出骨架，再刷新数据。
 setDocumentTheme(loadStoredTheme() ?? 'light');
+syncThemeFromSettings(state.board?.settings);
 render();
-refresh();
-startWaterReminder();
+if (!isHotReload || !state.board) {
+    refresh();
+}
+startWaterReminder(!isHotReload);
 
 // 启动时检查更新（延迟 3 秒，避免影响应用启动速度）
-setTimeout(() => {
-    checkForUpdates(false);
-}, 3000);
+if (!isHotReload) {
+    updateCheckTimer = window.setTimeout(() => {
+        checkForUpdates(false);
+    }, 3000);
+}
