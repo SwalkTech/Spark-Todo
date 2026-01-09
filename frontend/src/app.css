@@ -209,6 +209,7 @@
     inset: 0;
     background: var(--backdrop);
     backdrop-filter: blur(2px);
+    will-change: opacity;
     --wails-draggable: no-drag;
 }
 
@@ -224,7 +225,75 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    will-change: transform, opacity;
     --wails-draggable: no-drag;
+}
+
+.drawer-root[data-state="closing"] {
+    pointer-events: none;
+}
+
+@keyframes drawer-in {
+    from {
+        transform: translateX(-12px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes drawer-out {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(-12px);
+        opacity: 0;
+    }
+}
+
+@keyframes drawer-backdrop-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes drawer-backdrop-out {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+.drawer-root[data-state="open"] .drawer {
+    animation: drawer-in var(--drawer-duration) var(--drawer-easing) both;
+}
+
+.drawer-root[data-state="closing"] .drawer {
+    animation: drawer-out var(--drawer-duration) var(--drawer-easing) both;
+}
+
+.drawer-root[data-state="open"] .drawer-backdrop {
+    animation: drawer-backdrop-in var(--drawer-backdrop-in-duration) ease-out both;
+}
+
+.drawer-root[data-state="closing"] .drawer-backdrop {
+    animation: drawer-backdrop-out var(--drawer-backdrop-out-duration) ease-in both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .drawer-root[data-state] .drawer,
+    .drawer-root[data-state] .drawer-backdrop {
+        animation: none !important;
+    }
 }
 
 .drawer-title {
@@ -486,6 +555,7 @@ textarea {
     font-size: 0.875rem;
     line-height: 1.5;
     color: var(--text-secondary);
+    white-space: pre-wrap;
     max-height: 200px;
     overflow-y: auto;
     padding: 0.5rem;
