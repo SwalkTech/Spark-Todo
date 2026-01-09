@@ -49,9 +49,14 @@ type Group struct {
 // - important && !urgent  => 重要不紧急
 // - !important && urgent  => 不重要但紧急
 // - !important && !urgent => 不重要不紧急
+//
+// ParentID 用于支持子任务功能：
+// - ParentID == 0 => 主任务
+// - ParentID > 0  => 子任务，ParentID 指向父任务的 ID
 type Task struct {
 	ID        int64  `json:"id"`
 	GroupID   int64  `json:"groupId"`
+	ParentID  int64  `json:"parentId"`
 	Title     string `json:"title"`
 	Content   string `json:"content"`
 	Status    Status `json:"status"`
@@ -59,6 +64,7 @@ type Task struct {
 	Urgent    bool   `json:"urgent"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
+	SubTasks  []Task `json:"subTasks,omitempty"`
 }
 
 // Settings 为用户偏好设置（持久化到 SQLite settings 表）。

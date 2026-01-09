@@ -9,6 +9,7 @@
             :quadrant-tasks-map="quadrantTasksMap"
             :view-mode="viewMode"
             @add-task="onAddTask"
+            @add-sub-task="onAddSubTask"
             @edit-task="openTaskModal"
             @toggle-task-done="onToggleTaskDone"
         />
@@ -370,6 +371,7 @@ function openTaskModal(task: todo.Task) {
         kind: 'task',
         id: Number(task?.id ?? 0),
         groupId: Number(task?.groupId ?? defaultGroupId),
+        parentId: Number((task as any)?.parentId ?? 0),
         title: String((task as any)?.title ?? ''),
         content: String((task as any)?.content ?? ''),
         status: normalizeStatusValue((task as any)?.status),
@@ -392,11 +394,33 @@ function onAddTask(preset?: QuadrantPreset) {
         kind: 'task',
         id: 0,
         groupId: defaultGroupId,
+        parentId: 0,
         title: '',
         content: '',
         status: 'todo',
         important: Boolean(preset?.important ?? lastPreset.value.important ?? false),
         urgent: Boolean(preset?.urgent ?? lastPreset.value.urgent ?? false),
+    };
+}
+
+function onAddSubTask(parentTask: todo.Task) {
+    const defaultGroupId = getDefaultGroupId();
+    if (!defaultGroupId) {
+        showToast('初始化未完成，请稍后重试');
+        return;
+    }
+
+    modalError.value = null;
+    modal.value = {
+        kind: 'task',
+        id: 0,
+        groupId: Number(parentTask.groupId ?? defaultGroupId),
+        parentId: Number(parentTask.id),
+        title: '',
+        content: '',
+        status: 'todo',
+        important: Boolean(parentTask.important ?? false),
+        urgent: Boolean(parentTask.urgent ?? false),
     };
 }
 
@@ -461,6 +485,7 @@ async function submitTask(m: TaskModalState) {
         const task: todo.Task = {
             id: Number(m.id ?? 0),
             groupId,
+            parentId: Number(m.parentId ?? 0),
             status: String(m.status ?? 'todo'),
             title,
             content,

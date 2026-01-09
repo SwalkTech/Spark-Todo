@@ -12,6 +12,7 @@ export type TaskModalState = {
     kind: 'task';
     id: number;
     groupId: number;
+    parentId: number;
     title: string;
     content: string;
     status: StatusValue;

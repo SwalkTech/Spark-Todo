@@ -24,34 +24,125 @@
 
             <div class="task-list" :class="viewMode">
                 <template v-for="t in quadrantTasksMap[q.key]" :key="Number(t.id)">
-                    <div v-if="viewMode === 'list'" class="task-row" :class="{ done: isDone(t) }">
-                        <input
-                            type="checkbox"
-                            class="checkbox task-check"
-                            :checked="isDone(t)"
-                            aria-label="完成"
-                            @change="onToggleTaskDone(t, $event)"
-                        />
-                        <button class="task-main" type="button" @click="emit('editTask', t)">
-                            <div class="task-title">{{ t.title }}</div>
-                            <div v-if="String(t.content ?? '').trim()" class="task-content">
-                                {{ t.content }}
+                    <!-- 列表视图 -->
+                    <div v-if="viewMode === 'list'" class="task-item-wrapper">
+                        <div class="task-row" :class="[getStatusClass(t), { done: isDone(t) }]">
+                            <input
+                                type="checkbox"
+                                class="checkbox task-check"
+                                :checked="isDone(t)"
+                                aria-label="完成"
+                                @change="onToggleTaskDone(t, $event)"
+                            />
+                            <button class="task-main" type="button" @click="emit('editTask', t)">
+                                <div class="task-title">{{ t.title }}</div>
+                                <div v-if="String(t.content ?? '').trim()" class="task-content">
+                                    {{ t.content }}
+                                </div>
+                            </button>
+                            <div class="task-actions">
+                                <button
+                                    v-if="hasSubTasks(t)"
+                                    class="btn btn-ghost btn-icon btn-subtask-toggle"
+                                    type="button"
+                                    :title="isExpanded(t.id) ? '收起子任务' : '展开子任务'"
+                                    @click.stop="toggleExpand(t.id)"
+                                >
+                                    {{ isExpanded(t.id) ? '▼' : '▶' }}
+                                </button>
+                                <button
+                                    class="btn btn-ghost btn-icon btn-add-subtask"
+                                    type="button"
+                                    title="添加子任务"
+                                    @click.stop="emit('addSubTask', t)"
+                                >
+                                    +
+                                </button>
+                                <span v-if="hasSubTasks(t)" class="subtask-count">
+                                    {{ getSubTaskProgress(t) }}
+                                </span>
                             </div>
-                        </button>
+                        </div>
+                        <!-- 子任务列表 -->
+                        <div v-if="hasSubTasks(t) && isExpanded(t.id)" class="subtask-list">
+                            <div
+                                v-for="st in t.subTasks"
+                                :key="Number(st.id)"
+                                class="subtask-row"
+                                :class="[getStatusClass(st), { done: isDone(st) }]"
+                            >
+                                <input
+                                    type="checkbox"
+                                    class="checkbox task-check"
+                                    :checked="isDone(st)"
+                                    aria-label="完成"
+                                    @change="onToggleTaskDone(st, $event)"
+                                />
+                                <button class="task-main" type="button" @click="emit('editTask', st)">
+                                    <div class="task-title">{{ st.title }}</div>
+                                    <div v-if="String(st.content ?? '').trim()" class="task-content">
+                                        {{ st.content }}
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
-                    <button
-                        v-else
-                        class="task-card"
-                        :class="{ done: isDone(t) }"
-                        type="button"
-                        @click="emit('editTask', t)"
-                    >
-                        <div class="task-title">{{ t.title }}</div>
-                        <div v-if="String(t.content ?? '').trim()" class="task-content">
-                            {{ t.content }}
+                    <!-- 卡片视图 -->
+                    <div v-else class="task-item-wrapper">
+                        <div class="task-card" :class="[getStatusClass(t), { done: isDone(t) }]">
+                            <button class="task-card-main" type="button" @click="emit('editTask', t)">
+                                <div class="task-title">{{ t.title }}</div>
+                                <div v-if="String(t.content ?? '').trim()" class="task-content">
+                                    {{ t.content }}
+                                </div>
+                            </button>
+                            <div class="task-card-footer">
+                                <div class="task-actions">
+                                    <button
+                                        v-if="hasSubTasks(t)"
+                                        class="btn btn-ghost btn-icon btn-subtask-toggle"
+                                        type="button"
+                                        :title="isExpanded(t.id) ? '收起子任务' : '展开子任务'"
+                                        @click.stop="toggleExpand(t.id)"
+                                    >
+                                        {{ isExpanded(t.id) ? '▼' : '▶' }}
+                                    </button>
+                                    <button
+                                        class="btn btn-ghost btn-icon btn-add-subtask"
+                                        type="button"
+                                        title="添加子任务"
+                                        @click.stop="emit('addSubTask', t)"
+                                    >
+                                        +
+                                    </button>
+                                    <span v-if="hasSubTasks(t)" class="subtask-count">
+                                        {{ getSubTaskProgress(t) }}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                    </button>
+                        <!-- 子任务列表（卡片视图） -->
+                        <div v-if="hasSubTasks(t) && isExpanded(t.id)" class="subtask-list subtask-list-cards">
+                            <div
+                                v-for="st in t.subTasks"
+                                :key="Number(st.id)"
+                                class="subtask-card"
+                                :class="[getStatusClass(st), { done: isDone(st) }]"
+                            >
+                                <input
+                                    type="checkbox"
+                                    class="checkbox task-check"
+                                    :checked="isDone(st)"
+                                    aria-label="完成"
+                                    @change="onToggleTaskDone(st, $event)"
+                                />
+                                <button class="task-main" type="button" @click="emit('editTask', st)">
+                                    <div class="task-title">{{ st.title }}</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </template>
             </div>
         </section>
@@ -59,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { toRefs } from 'vue';
+import { ref, toRefs } from 'vue';
 
 import type { todo } from '../../wailsjs/go/models';
 
@@ -78,12 +169,43 @@ const { matrixAreas, quadrantTasksMap, viewMode, visibleQuadrants } = toRefs(pro
 
 const emit = defineEmits<{
     (e: 'addTask', preset: QuadrantPreset): void;
+    (e: 'addSubTask', parentTask: todo.Task): void;
     (e: 'editTask', task: todo.Task): void;
     (e: 'toggleTaskDone', payload: { task: todo.Task; checked: boolean }): void;
 }>();
 
+// 存储展开状态的任务 ID
+const expandedTasks = ref<Set<number>>(new Set());
+
 function isDone(task: todo.Task) {
     return String(task.status) === 'done';
+}
+
+function getStatusClass(task: todo.Task): string {
+    const status = String(task.status);
+    return `status-${status}`;
+}
+
+function hasSubTasks(task: todo.Task): boolean {
+    return Array.isArray(task.subTasks) && task.subTasks.length > 0;
+}
+
+function isExpanded(taskId: number): boolean {
+    return expandedTasks.value.has(taskId);
+}
+
+function toggleExpand(taskId: number) {
+    if (expandedTasks.value.has(taskId)) {
+        expandedTasks.value.delete(taskId);
+    } else {
+        expandedTasks.value.add(taskId);
+    }
+}
+
+function getSubTaskProgress(task: todo.Task): string {
+    if (!task.subTasks || task.subTasks.length === 0) return '';
+    const done = task.subTasks.filter((st) => String(st.status) === 'done').length;
+    return `${done}/${task.subTasks.length}`;
 }
 
 function onToggleTaskDone(task: todo.Task, e: Event) {

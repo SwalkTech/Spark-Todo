@@ -212,6 +212,11 @@ func (s *Store) ensureTasksColumns(ctx context.Context) error {
 			return fmt.Errorf("add tasks.urgent: %w", err)
 		}
 	}
+	if !cols["parent_id"] {
+		if _, err := s.db.ExecContext(ctx, `ALTER TABLE tasks ADD COLUMN parent_id INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("add tasks.parent_id: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -373,20 +378,23 @@ func (s *Store) DeleteGroup(ctx context.Context, id int64) error {
 // ListTasks 返回任务列表，按 updated_at 倒序（最近修改的在前）。
 //
 // important/urgent 在库中以 0/1 保存，这里转换为 bool 方便前端使用。
+// 返回的任务列表会自动将子任务挂载到父任务的 SubTasks 字段下。
 func (s *Store) ListTasks(ctx context.Context) ([]Task, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, group_id, title, content, status, important, urgent, created_at, updated_at FROM tasks ORDER BY updated_at DESC, id DESC`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, group_id, parent_id, title, content, status, important, urgent, created_at, updated_at FROM tasks ORDER BY updated_at DESC, id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
 	defer rows.Close()
 
-	var out []Task
+	var allTasks []Task
+	taskMap := make(map[int64]*Task)
+
 	for rows.Next() {
 		var t Task
 		var status string
 		var importantInt int
 		var urgentInt int
-		if err := rows.Scan(&t.ID, &t.GroupID, &t.Title, &t.Content, &status, &importantInt, &urgentInt, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.GroupID, &t.ParentID, &t.Title, &t.Content, &status, &importantInt, &urgentInt, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}
 		parsed, err := ParseStatus(status)
@@ -396,19 +404,53 @@ func (s *Store) ListTasks(ctx context.Context) ([]Task, error) {
 		t.Status = parsed
 		t.Important = importantInt == 1
 		t.Urgent = urgentInt == 1
-		out = append(out, t)
+		t.SubTasks = []Task{}
+		allTasks = append(allTasks, t)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate tasks: %w", err)
 	}
-	return out, nil
+
+	// 构建 map 用于快速查找
+	for i := range allTasks {
+		taskMap[allTasks[i].ID] = &allTasks[i]
+	}
+
+	// 将子任务挂载到父任务
+	var rootTasks []Task
+	for i := range allTasks {
+		t := &allTasks[i]
+		if t.ParentID == 0 {
+			// 主任务
+			rootTasks = append(rootTasks, *t)
+		} else if parent, ok := taskMap[t.ParentID]; ok {
+			// 子任务，挂载到父任务
+			parent.SubTasks = append(parent.SubTasks, *t)
+		} else {
+			// 父任务不存在，作为主任务处理
+			rootTasks = append(rootTasks, *t)
+		}
+	}
+
+	// 更新 rootTasks 中父任务的 SubTasks
+	for i := range rootTasks {
+		if ptr, ok := taskMap[rootTasks[i].ID]; ok {
+			rootTasks[i].SubTasks = ptr.SubTasks
+		}
+	}
+
+	return rootTasks, nil
 }
 
 // UpsertTask 新增或更新任务，并返回落库后的完整任务对象。
 //
-// 这里做了“前置校验”，目的：
+// 这里做了"前置校验"，目的：
 // - 给前端更明确的错误信息（中文、可控）
 // - 避免依赖数据库层错误（不同平台/驱动可能文案不同）
+//
+// 父子任务状态联动规则：
+// - 父任务完成时，所有子任务自动完成
+// - 所有子任务完成时，父任务自动完成
 func (s *Store) UpsertTask(ctx context.Context, req Task) (Task, error) {
 	req.Title = strings.TrimSpace(req.Title)
 	req.Content = strings.TrimSpace(req.Content)
@@ -436,11 +478,23 @@ func (s *Store) UpsertTask(ctx context.Context, req Task) (Task, error) {
 		return Task{}, err
 	}
 
+	// 如果有 ParentID，验证父任务存在
+	if req.ParentID > 0 {
+		var parentExists int
+		err := s.db.QueryRowContext(ctx, `SELECT 1 FROM tasks WHERE id = ? AND parent_id = 0`, req.ParentID).Scan(&parentExists)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Task{}, errors.New("父任务不存在")
+		}
+		if err != nil {
+			return Task{}, fmt.Errorf("check parent task: %w", err)
+		}
+	}
+
 	now := time.Now().UnixMilli()
 	if req.ID == 0 {
 		res, err := s.db.ExecContext(ctx,
-			`INSERT INTO tasks(group_id, title, content, status, important, urgent, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
-			req.GroupID, req.Title, req.Content, string(req.Status), boolTo01Int(req.Important), boolTo01Int(req.Urgent), now, now,
+			`INSERT INTO tasks(group_id, parent_id, title, content, status, important, urgent, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			req.GroupID, req.ParentID, req.Title, req.Content, string(req.Status), boolTo01Int(req.Important), boolTo01Int(req.Urgent), now, now,
 		)
 		if err != nil {
 			return Task{}, fmt.Errorf("create task: %w", err)
@@ -452,14 +506,35 @@ func (s *Store) UpsertTask(ctx context.Context, req Task) (Task, error) {
 		req.ID = newID
 		req.CreatedAt = now
 		req.UpdatedAt = now
+
+		// 子任务创建后检查是否需要更新父任务状态
+		if req.ParentID > 0 {
+			if err := s.syncParentStatus(ctx, req.ParentID, now); err != nil {
+				return Task{}, err
+			}
+		}
+
 		return req, nil
+	}
+
+	// 获取旧的任务状态用于判断状态变化
+	var oldStatus string
+	var oldParentID int64
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT status, parent_id FROM tasks WHERE id = ?`,
+		req.ID,
+	).Scan(&oldStatus, &oldParentID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Task{}, fmt.Errorf("任务不存在（id=%d）", req.ID)
+		}
+		return Task{}, fmt.Errorf("get old task: %w", err)
 	}
 
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE tasks
-		 SET group_id = ?, title = ?, content = ?, status = ?, important = ?, urgent = ?, updated_at = ?
+		 SET group_id = ?, parent_id = ?, title = ?, content = ?, status = ?, important = ?, urgent = ?, updated_at = ?
 		 WHERE id = ?`,
-		req.GroupID, req.Title, req.Content, string(req.Status), boolTo01Int(req.Important), boolTo01Int(req.Urgent), now, req.ID,
+		req.GroupID, req.ParentID, req.Title, req.Content, string(req.Status), boolTo01Int(req.Important), boolTo01Int(req.Urgent), now, req.ID,
 	)
 	if err != nil {
 		return Task{}, fmt.Errorf("update task: %w", err)
@@ -472,14 +547,34 @@ func (s *Store) UpsertTask(ctx context.Context, req Task) (Task, error) {
 		return Task{}, fmt.Errorf("任务不存在（id=%d）", req.ID)
 	}
 
+	// 状态联动处理
+	statusChanged := oldStatus != string(req.Status)
+	if statusChanged {
+		// 如果这是父任务且状态变为完成，则所有子任务也完成
+		if oldParentID == 0 && req.Status == StatusDone {
+			if _, err := s.db.ExecContext(ctx,
+				`UPDATE tasks SET status = ?, updated_at = ? WHERE parent_id = ?`,
+				string(StatusDone), now, req.ID,
+			); err != nil {
+				return Task{}, fmt.Errorf("complete subtasks: %w", err)
+			}
+		}
+		// 如果这是子任务，检查是否需要更新父任务状态
+		if req.ParentID > 0 {
+			if err := s.syncParentStatus(ctx, req.ParentID, now); err != nil {
+				return Task{}, err
+			}
+		}
+	}
+
 	var t Task
 	var status string
 	var importantInt int
 	var urgentInt int
 	if err := s.db.QueryRowContext(ctx,
-		`SELECT id, group_id, title, content, status, important, urgent, created_at, updated_at FROM tasks WHERE id = ?`,
+		`SELECT id, group_id, parent_id, title, content, status, important, urgent, created_at, updated_at FROM tasks WHERE id = ?`,
 		req.ID,
-	).Scan(&t.ID, &t.GroupID, &t.Title, &t.Content, &status, &importantInt, &urgentInt, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	).Scan(&t.ID, &t.GroupID, &t.ParentID, &t.Title, &t.Content, &status, &importantInt, &urgentInt, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return Task{}, fmt.Errorf("reload task: %w", err)
 	}
 	parsed, err := ParseStatus(status)
@@ -492,11 +587,76 @@ func (s *Store) UpsertTask(ctx context.Context, req Task) (Task, error) {
 	return t, nil
 }
 
+// syncParentStatus 检查并同步父任务状态。
+// 如果所有子任务都完成，则父任务也自动完成。
+// 如果有子任务未完成，且父任务是完成状态，则保持父任务状态不变。
+func (s *Store) syncParentStatus(ctx context.Context, parentID int64, now int64) error {
+	// 获取父任务当前状态
+	var parentStatus string
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT status FROM tasks WHERE id = ?`,
+		parentID,
+	).Scan(&parentStatus); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil // 父任务不存在，忽略
+		}
+		return fmt.Errorf("get parent status: %w", err)
+	}
+
+	// 统计子任务完成情况
+	var totalSubtasks, doneSubtasks int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*), SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) FROM tasks WHERE parent_id = ?`,
+		parentID,
+	).Scan(&totalSubtasks, &doneSubtasks); err != nil {
+		return fmt.Errorf("count subtasks: %w", err)
+	}
+
+	// 如果没有子任务，不做任何处理
+	if totalSubtasks == 0 {
+		return nil
+	}
+
+	// 如果所有子任务都完成，父任务也完成
+	if totalSubtasks > 0 && totalSubtasks == doneSubtasks && parentStatus != string(StatusDone) {
+		if _, err := s.db.ExecContext(ctx,
+			`UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?`,
+			string(StatusDone), now, parentID,
+		); err != nil {
+			return fmt.Errorf("complete parent task: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // DeleteTask 删除任务。
+// 如果删除的是父任务，会级联删除所有子任务。
+// 如果删除的是子任务，会检查并更新父任务状态。
 func (s *Store) DeleteTask(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return errors.New("无效的任务ID")
 	}
+
+	// 获取任务信息，判断是父任务还是子任务
+	var parentID int64
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT parent_id FROM tasks WHERE id = ?`,
+		id,
+	).Scan(&parentID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("任务不存在（id=%d）", id)
+		}
+		return fmt.Errorf("get task parent: %w", err)
+	}
+
+	// 如果是父任务，先删除所有子任务
+	if parentID == 0 {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM tasks WHERE parent_id = ?`, id); err != nil {
+			return fmt.Errorf("delete subtasks: %w", err)
+		}
+	}
+
 	res, err := s.db.ExecContext(ctx, `DELETE FROM tasks WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("delete task: %w", err)
@@ -508,6 +668,15 @@ func (s *Store) DeleteTask(ctx context.Context, id int64) error {
 	if affected == 0 {
 		return fmt.Errorf("任务不存在（id=%d）", id)
 	}
+
+	// 如果是子任务，检查是否需要更新父任务状态
+	if parentID > 0 {
+		now := time.Now().UnixMilli()
+		if err := s.syncParentStatus(ctx, parentID, now); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

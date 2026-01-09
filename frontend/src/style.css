@@ -14,6 +14,12 @@
     --accent: #2a9d8f;
     --danger: #e76f51;
 
+    /* 任务状态颜色 */
+    --status-todo: #6b7280;
+    --status-doing: #f59e0b;
+    --status-doing-bg: rgba(245, 158, 11, 0.08);
+    --status-done: #10b981;
+
     --ease-smooth: cubic-bezier(0.2, 0, 0, 1);
 
     --theme-transition-duration: 450ms;
@@ -45,6 +51,12 @@
     --bg: #0f1216;
     --surface: #161b22;
     --text: #e6edf3;
+
+    /* 任务状态颜色（暗色主题） */
+    --status-todo: #9ca3af;
+    --status-doing: #fbbf24;
+    --status-doing-bg: rgba(251, 191, 36, 0.12);
+    --status-done: #34d399;
 
     --border: rgba(230, 237, 243, 0.12);
     --shadow: 0 8px 20px rgba(0, 0, 0, 0.45);

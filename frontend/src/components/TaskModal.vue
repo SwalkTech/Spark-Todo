@@ -1,7 +1,10 @@
 <template>
     <div class="modal" role="dialog" aria-modal="true" aria-label="任务" @click.stop>
         <div class="modal-title-row">
-            <div class="modal-title">{{ form.id ? '编辑任务' : '新增任务' }}</div>
+            <div class="modal-title">
+                {{ form.id ? '编辑任务' : '新增任务' }}
+                <span v-if="form.parentId" class="subtask-badge">子任务</span>
+            </div>
             <button
                 v-if="form.id"
                 class="btn btn-danger"

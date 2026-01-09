@@ -13,7 +13,10 @@
     --wails-draggable: drag;
     --matrix-pad: clamp(6px, 2vw, 10px);
     --matrix-gap: clamp(6px, 2vw, 10px);
-    --quadrant-radius: clamp(12px, 2.6vw, 14px);
+    --surface-radius: clamp(14px, 3vw, 18px);
+    --control-radius: clamp(10px, 2.4vw, 14px);
+    --item-radius: clamp(12px, 2.8vw, 16px);
+    --quadrant-radius: var(--surface-radius);
     --header-pad-y: clamp(6px, 1.8vw, 8px);
     --header-pad-x: clamp(8px, 2.2vw, 10px);
     --task-pad: clamp(6px, 2vw, 8px);
@@ -46,6 +49,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
 }
 
 /* 象限头部：同时也是拖拽区域（小窗口时可用于移动无边框窗口） */
@@ -103,7 +107,7 @@
     width: 100%;
     text-align: left;
     border: 1px solid var(--border);
-    border-radius: clamp(11px, 2.4vw, 12px);
+    border-radius: var(--item-radius, 14px);
     padding: clamp(7px, 2vw, 8px);
     background: var(--surface-muted);
     color: var(--text);
@@ -121,7 +125,7 @@
     align-items: flex-start;
     gap: 10px;
     border: 1px solid var(--border);
-    border-radius: clamp(11px, 2.4vw, 12px);
+    border-radius: var(--item-radius, 14px);
     padding: clamp(5px, 1.6vw, 6px) clamp(7px, 2vw, 8px);
     background: var(--surface-muted-2);
 }
@@ -156,12 +160,151 @@
     overflow-wrap: anywhere;
 }
 
+/* 任务状态颜色 */
+.status-todo {
+    border-left: 3px solid var(--status-todo, #6b7280);
+}
+
+.status-doing {
+    border-left: 3px solid var(--status-doing, #f59e0b);
+    background: var(--status-doing-bg, rgba(245, 158, 11, 0.05));
+}
+
+.status-done {
+    border-left: 3px solid var(--status-done, #10b981);
+}
+
 .done {
-    opacity: 0.75;
+    opacity: 0.65;
 }
 
 .done .task-title {
     text-decoration: line-through;
+}
+
+/* 任务项包装器 */
+.task-item-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 任务操作按钮区域 */
+.task-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.btn-subtask-toggle {
+    font-size: 10px;
+    padding: 2px 6px;
+    min-width: 24px;
+}
+
+.btn-add-subtask {
+    font-size: 12px;
+    padding: 2px 6px;
+    min-width: 24px;
+}
+
+.subtask-count {
+    font-size: 11px;
+    color: var(--text-secondary, rgba(0, 0, 0, 0.6));
+    padding: 2px 6px;
+    background: var(--pill-bg, rgba(0, 0, 0, 0.05));
+    border-radius: 999px;
+}
+
+/* 子任务列表 */
+.subtask-list {
+    margin-left: 24px;
+    margin-top: 4px;
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.subtask-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: var(--item-radius, 10px);
+    background: var(--surface-muted-2);
+    border: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.subtask-row .task-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.subtask-row .task-content {
+    font-size: 11px;
+}
+
+/* 卡片视图子任务 */
+.subtask-list-cards {
+    margin-left: 12px;
+    padding-left: 8px;
+}
+
+.subtask-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--item-radius, 10px);
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.subtask-card .task-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* 卡片视图调整 */
+.task-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.task-card-main {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    color: var(--text);
+    cursor: pointer;
+    flex: 1;
+}
+
+.task-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+}
+
+/* 子任务标识 */
+.subtask-badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    margin-left: 8px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 999px;
+    vertical-align: middle;
 }
 
 /* 悬浮按钮：左上菜单 / 右下新增 */
@@ -330,7 +473,7 @@
     gap: 8px;
     padding: 5px 8px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--control-radius, 12px);
     background: var(--toggle-bg);
     user-select: none;
 }
@@ -352,7 +495,7 @@
     background: var(--surface);
     color: var(--text);
     padding: 5px 8px;
-    border-radius: 9px;
+    border-radius: var(--control-radius, 12px);
     cursor: pointer;
     font-weight: 700;
     transition: box-shadow 120ms ease;
@@ -406,7 +549,7 @@ textarea {
 .textarea {
     width: 100%;
     border: 1px solid var(--border);
-    border-radius: 9px;
+    border-radius: var(--control-radius, 12px);
     padding: 7px 9px;
     background: var(--surface);
     color: var(--text);
@@ -442,14 +585,14 @@ textarea {
 .error-block {
     padding: 14px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--surface-radius, 16px);
     background: var(--surface-translucent);
 }
 
 .empty-state {
     padding: 14px;
     border: 1px dashed var(--border);
-    border-radius: 12px;
+    border-radius: var(--surface-radius, 16px);
     background: var(--surface-soft);
     opacity: 0.8;
 }
@@ -492,7 +635,7 @@ textarea {
     overflow-y: auto;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--surface-radius, 16px);
     box-shadow: var(--shadow-stronger);
     padding: 12px;
     --wails-draggable: no-drag;
@@ -581,7 +724,7 @@ textarea {
     background: rgba(231, 111, 81, 0.08);
     border: 1px solid rgba(231, 111, 81, 0.25);
     padding: 8px 10px;
-    border-radius: 12px;
+    border-radius: var(--surface-radius, 16px);
 }
 
 /* Toast：右下角提示（success/error） */
@@ -592,7 +735,7 @@ textarea {
     z-index: 40;
     max-width: min(380px, calc(100% - 20px));
     padding: 8px 10px;
-    border-radius: 12px;
+    border-radius: var(--surface-radius, 16px);
     border: 1px solid var(--border);
     background: var(--surface);
     box-shadow: var(--shadow-strong);
@@ -630,13 +773,15 @@ textarea {
 
 /* 更小窗口：压缩 padding/gap/按钮尺寸，提高信息密度 */
 @media (max-width: 340px), (max-height: 340px) {
+    .app-shell {
+        --surface-radius: 14px;
+        --control-radius: 12px;
+        --item-radius: 12px;
+    }
+
     .matrix {
         --matrix-pad: 6px;
         --matrix-gap: 6px;
-    }
-
-    .quadrant {
-        border-radius: 12px;
     }
 
     .quadrant-header {
@@ -655,12 +800,10 @@ textarea {
 
     .task-card {
         padding: 7px;
-        border-radius: 11px;
     }
 
     .task-row {
         padding: 5px 7px;
-        border-radius: 11px;
     }
 
     .fab {
